@@ -195,6 +195,28 @@
             font-size: 0.85rem;
         }
 
+        .app-status {
+            margin-bottom: 20px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid #dbeafe;
+            background: #eff6ff;
+            color: #1d4ed8;
+            display: none;
+        }
+
+        .app-status.error {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+
+        .app-status.success {
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+            color: #047857;
+        }
+
         @media (max-width: 900px) {
             .modal-card { padding: 18px; }
         }
@@ -203,6 +225,7 @@
 <body>
 <h1><i class="fas fa-clipboard-list" style="color:#2563eb;"></i> Receiving Incident Tracker <span class="badge">Thales Avionics · Orlando · v3</span></h1>
 <div class="subhead">Immediate logging · blockage tracking · actionable analytics</div>
+<div id="appStatus" class="app-status"></div>
 
 <div class="app-grid">
     <!-- NEW INCIDENT + OPEN -->
@@ -383,56 +406,82 @@
 <script>
     (function(){
         "use strict";
-        // ----- REFERENCE DATA (persisted) -----
+        // ----- REFERENCE DATA (persisted via Cloudflare D1) -----
         let operators = ["Maria Lopez", "James Carter", "Linda Park", "Robert Chen"];
         let suppliers = ["AeroTech Supplies", "Avionics Plus", "SkyParts Intl", "Precision Avio", "FastComp"];
         let buyers = ["Alice Brown", "Mark Spencer", "Sophia Reid", "David Zhou"];
         let errorTypes = ["Wrong documentation", "Missing documentation", "Wrong labeling", "Missing label", "Quantity discrepancy", "Wrong part number", "Damaged material", "Packaging issue", "SAP mismatch", "Other"];
 
         let incidents = [];
-        const STORAGE_KEY = 'thales_v3_incidents';
-        const REF_KEY = 'thales_v3_refs';
+        const statusBanner = document.getElementById('appStatus');
+        let busy = false;
 
-        function loadRefs() {
-            const s = localStorage.getItem(REF_KEY); if(s) try{ const r=JSON.parse(s); operators=r.operators||operators; suppliers=r.suppliers||suppliers; buyers=r.buyers||buyers; errorTypes=r.errorTypes||errorTypes; }catch(e){}
-        }
-        function saveRefs() { localStorage.setItem(REF_KEY, JSON.stringify({operators,suppliers,buyers,errorTypes})); }
-        function loadIncidents() {
-            const s = localStorage.getItem(STORAGE_KEY);
-            if (s) {
-                try { incidents = JSON.parse(s); } catch(e) {}
+        function setStatus(message, variant = 'info') {
+            if (!statusBanner) return;
+            if (!message) {
+                statusBanner.style.display = 'none';
+                statusBanner.textContent = '';
+                statusBanner.className = 'app-status';
+                return;
             }
-            if (!incidents.length) seed();
-
-            incidents = incidents.map(i => {
-                let status = 'Open';
-                if (i.deletedAt) status = 'Deleted';
-                else if (i.resolvedAt) status = 'Resolved';
-
-                return {
-                    deletedAt: null,
-                    deletedReason: '',
-                    ...i,
-                    status
-                };
-            });
+            statusBanner.textContent = message;
+            statusBanner.className = `app-status ${variant === 'info' ? '' : variant}`.trim();
+            statusBanner.style.display = 'block';
         }
-        function saveIncidents() { localStorage.setItem(STORAGE_KEY, JSON.stringify(incidents)); }
-        function seed() {
-            const now = new Date();
-            const twoDays = new Date(now.getTime() - 50 * 60 * 60 * 1000);
-            const yest = new Date(now.getTime() - 26 * 60 * 60 * 1000);
-            const archivedAt = new Date(now.getTime() - 6 * 60 * 60 * 1000);
 
-            incidents = [
-                { id:'INC-1001', batchNumber:'B2304-01', partNumber:'AV-3342', quantity:5, operator:'Maria Lopez', supplier:'AeroTech Supplies', buyer:'Alice Brown', errorType:'Missing documentation', comment:'Manual missing', createdAt: twoDays.toISOString(), resolvedAt: new Date(twoDays.getTime()+32*60*60*1000).toISOString(), deletedAt:null, deletedReason:'', status:'Resolved' },
-                { id:'INC-1002', batchNumber:'B2401-09', partNumber:'AV-7810', quantity:2, operator:'James Carter', supplier:'SkyParts Intl', buyer:'Mark Spencer', errorType:'Damaged material', comment:'Box crushed', createdAt: yest.toISOString(), resolvedAt: null, deletedAt:null, deletedReason:'', status:'Open' },
-                { id:'INC-1003', batchNumber:'B2399-22', partNumber:'AV-5500', quantity:10, operator:'Linda Park', supplier:'Avionics Plus', buyer:'Sophia Reid', errorType:'Wrong labeling', comment:'Label does not match receiving paperwork', createdAt: new Date(now.getTime()-12*60*60*1000).toISOString(), resolvedAt: null, deletedAt:null, deletedReason:'', status:'Open' },
-                { id:'INC-1004', batchNumber:'B2412-45', partNumber:'AV-9901', quantity:1, operator:'Robert Chen', supplier:'Precision Avio', buyer:'David Zhou', errorType:'Quantity discrepancy', comment:'Expected 3', createdAt: new Date(now.getTime()-8*60*60*1000).toISOString(), resolvedAt: new Date(now.getTime()-2*60*60*1000).toISOString(), deletedAt:null, deletedReason:'', status:'Resolved' },
-                { id:'INC-1005', batchNumber:'B2501-18', partNumber:'AV-7721', quantity:3, operator:'Maria Lopez', supplier:'FastComp', buyer:'Alice Brown', errorType:'SAP mismatch', comment:'Wrong entry created at reception', createdAt: new Date(now.getTime()-80*60*60*1000).toISOString(), resolvedAt:null, deletedAt: archivedAt.toISOString(), deletedReason:'Created by mistake. Duplicate entry already tracked in another incident.', status:'Deleted' }
-            ];
+        function setBusyState(isBusy, message = '') {
+            busy = isBusy;
+            if (isBusy) setStatus(message || 'Synchronizing with the server...');
         }
-        function generateId(){ return 'INC-'+Date.now().toString().slice(-6)+'-'+Math.floor(Math.random()*1000); }
+
+        function normalizeIncident(raw) {
+            let status = raw.status || 'Open';
+            if (raw.deletedAt) status = 'Deleted';
+            else if (raw.resolvedAt) status = 'Resolved';
+
+            return {
+                deletedAt: null,
+                deletedReason: '',
+                ...raw,
+                status
+            };
+        }
+
+        async function apiRequest(path, options = {}) {
+            const config = { method: options.method || 'GET', headers: {} };
+            if (options.body !== undefined) {
+                config.headers['content-type'] = 'application/json';
+                config.body = JSON.stringify(options.body);
+            }
+
+            const response = await fetch(path, config);
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.error || `Request failed with status ${response.status}`);
+            }
+            return payload;
+        }
+
+        async function loadAppData(showLoading = false) {
+            try {
+                setBusyState(showLoading, 'Loading persistent data from Cloudflare D1...');
+                const data = await apiRequest('/api/bootstrap');
+                operators = data.references?.operators || [];
+                suppliers = data.references?.suppliers || [];
+                buyers = data.references?.buyers || [];
+                errorTypes = data.references?.errorTypes || [];
+                incidents = (data.incidents || []).map(normalizeIncident);
+                refreshAll();
+                setStatus('Connected to persistent storage.', 'success');
+                setTimeout(() => {
+                    if (!busy) setStatus('');
+                }, 1800);
+            } catch (err) {
+                setStatus(`Cloudflare backend unavailable: ${err.message}`, 'error');
+            } finally {
+                setBusyState(false);
+            }
+        }
         function formatDuration(created, resolved){ const end=resolved?new Date(resolved):new Date(); const h=(end-new Date(created))/(1000*60*60); return h<1? Math.round(h*60)+' min' : h.toFixed(1)+' h'; }
         function getDurationClass(h){ if(h>=24) return 'critical'; if(h>=8) return 'warning'; return 'normal'; }
 
@@ -541,12 +590,15 @@
             const reason = (document.getElementById('deleteReason')?.value || '').trim();
             if (!inc) return;
             if (!reason) { alert('A reason is required before archiving this incident.'); return; }
-            inc.deletedAt = new Date().toISOString();
-            inc.deletedReason = reason;
-            inc.status = 'Deleted';
-            saveIncidents();
-            closeDeleteModal();
-            refreshAll();
+            return apiRequest(`/api/incidents/${pendingDeleteId}/archive`, {
+                method: 'POST',
+                body: { reason }
+            }).then(async () => {
+                closeDeleteModal();
+                await loadAppData();
+            }).catch((err) => {
+                setStatus(err.message, 'error');
+            });
         }
 
         // RENDER OPEN
@@ -566,7 +618,10 @@
             document.getElementById('openCountBadge').textContent=open.length;
             updatePaginationUi('open', pageMeta);
         }
-        function resolveIncident(id){ const inc=incidents.find(i=>i.id===id); if(inc){ inc.resolvedAt=new Date().toISOString(); inc.status='Resolved'; saveIncidents(); refreshAll(); } }
+        async function resolveIncident(id){
+            await apiRequest(`/api/incidents/${id}/resolve`, { method: 'POST' });
+            await loadAppData();
+        }
 
         // RENDER RESOLVED
         let lastResolvedFiltered = [];
@@ -697,32 +752,68 @@
             document.getElementById('errorListDisplay').innerHTML=errorTypes.map(e=>`<li>${e}</li>`).join('');
         }
         // events
-        document.getElementById('incidentForm').addEventListener('submit',e=>{ e.preventDefault();
+        document.getElementById('incidentForm').addEventListener('submit',async e=>{ e.preventDefault();
             const op=document.getElementById('operatorSelect').value, sup=document.getElementById('supplierSelect').value, batch=document.getElementById('batchNumber').value.trim(), part=document.getElementById('partNumber').value.trim(), qty=+document.getElementById('quantity').value, buyer=document.getElementById('buyerSelect').value, err=document.getElementById('errorTypeSelect').value, comment=document.getElementById('comment').value.trim();
             if(!op||!sup||!batch||!part||!qty||!buyer||!err) { alert('All required fields must be filled.'); return; }
             const dupId = checkDuplicate(batch,part,sup,err);
             if(dupId && !confirm(`Similar open incident ${dupId} exists. Create anyway?`)) return;
-            incidents.push({ id:generateId(), batchNumber:batch, partNumber:part, quantity:qty, operator:op, supplier:sup, buyer, errorType:err, comment, createdAt:new Date().toISOString(), resolvedAt:null, deletedAt:null, deletedReason:'', status:'Open' });
-            saveIncidents(); e.target.reset(); refreshAll();
+            try {
+                setBusyState(true, 'Creating incident...');
+                await apiRequest('/api/incidents', {
+                    method: 'POST',
+                    body: { operator: op, supplier: sup, batchNumber: batch, partNumber: part, quantity: qty, buyer, errorType: err, comment }
+                });
+                e.target.reset();
+                await loadAppData();
+            } catch (err) {
+                setStatus(err.message, 'error');
+            } finally {
+                setBusyState(false);
+            }
         });
         document.getElementById('toggleListManagerBtn').addEventListener('click',()=>{ const p=document.getElementById('listManagerPanel'); p.style.display=p.style.display==='none'?'block':'none'; });
-        function addRef(arr, inputId){ const v=document.getElementById(inputId).value.trim(); if(v && !arr.includes(v)){ arr.push(v); saveRefs(); refreshAll(); document.getElementById(inputId).value=''; } }
-        document.getElementById('addOperatorBtn').addEventListener('click',()=>addRef(operators,'newOperatorInput'));
-        document.getElementById('addSupplierBtn').addEventListener('click',()=>addRef(suppliers,'newSupplierInput'));
-        document.getElementById('addBuyerBtn').addEventListener('click',()=>addRef(buyers,'newBuyerInput'));
-        document.getElementById('addErrorBtn').addEventListener('click',()=>addRef(errorTypes,'newErrorInput'));
+        async function addRef(categoryKey, inputId){
+            const input = document.getElementById(inputId);
+            const value = input.value.trim();
+            if (!value) return;
+            try {
+                const response = await apiRequest(`/api/reference-data/${categoryKey}`, {
+                    method: 'POST',
+                    body: { value }
+                });
+                operators = response.references?.operators || operators;
+                suppliers = response.references?.suppliers || suppliers;
+                buyers = response.references?.buyers || buyers;
+                errorTypes = response.references?.errorTypes || errorTypes;
+                input.value = '';
+                refreshAll();
+            } catch (err) {
+                setStatus(err.message, 'error');
+            }
+        }
+        document.getElementById('addOperatorBtn').addEventListener('click',()=>addRef('operators','newOperatorInput'));
+        document.getElementById('addSupplierBtn').addEventListener('click',()=>addRef('suppliers','newSupplierInput'));
+        document.getElementById('addBuyerBtn').addEventListener('click',()=>addRef('buyers','newBuyerInput'));
+        document.getElementById('addErrorBtn').addEventListener('click',()=>addRef('errorTypes','newErrorInput'));
         document.querySelectorAll('.period-btn').forEach(b=>b.addEventListener('click',function(){ document.querySelectorAll('.period-btn').forEach(x=>x.classList.remove('active')); this.classList.add('active'); currentPeriod=this.dataset.period; renderDashboard(); }));
         document.getElementById('filterSupplierOpen').addEventListener('change',()=>{ resetPage('open'); renderOpen(); }); document.getElementById('filterBuyerOpen').addEventListener('change',()=>{ resetPage('open'); renderOpen(); }); document.getElementById('filterErrorOpen').addEventListener('change',()=>{ resetPage('open'); renderOpen(); });
         document.getElementById('clearFiltersOpen').addEventListener('click',()=>{ document.getElementById('filterSupplierOpen').value=''; document.getElementById('filterBuyerOpen').value=''; document.getElementById('filterErrorOpen').value=''; resetPage('open'); renderOpen(); });
         document.getElementById('searchResolved').addEventListener('input',()=>{ resetPage('resolved'); renderResolved(); }); document.getElementById('filterSupplierResolved').addEventListener('change',()=>{ resetPage('resolved'); renderResolved(); }); document.getElementById('filterBuyerResolved').addEventListener('change',()=>{ resetPage('resolved'); renderResolved(); }); document.getElementById('filterErrorResolved').addEventListener('change',()=>{ resetPage('resolved'); renderResolved(); });
         document.getElementById('clearResolvedFilters').addEventListener('click',()=>{ document.getElementById('searchResolved').value=''; document.getElementById('filterSupplierResolved').value=''; document.getElementById('filterBuyerResolved').value=''; document.getElementById('filterErrorResolved').value=''; resetPage('resolved'); renderResolved(); });
-        document.addEventListener('click', (e) => {
+        document.addEventListener('click', async (e) => {
             const target = e.target.closest('button, .modal-backdrop');
             if (!target) return;
 
             if (target.dataset.id) {
                 if(!confirm(`Resolve incident ${target.dataset.id}?`)) return;
-                resolveIncident(target.dataset.id);
+                try {
+                    setBusyState(true, 'Resolving incident...');
+                    await resolveIncident(target.dataset.id);
+                } catch (err) {
+                    setStatus(err.message, 'error');
+                } finally {
+                    setBusyState(false);
+                }
                 return;
             }
 
@@ -767,7 +858,7 @@
             }
 
             if (target.id === 'confirmDeleteBtn') {
-                archiveIncident();
+                await archiveIncident();
             }
         });
 
@@ -799,7 +890,8 @@
         });
         setInterval(()=>{ renderOpen(); }, 60000);
         // init
-        loadRefs(); loadIncidents(); refreshAll();
+        refreshAll();
+        loadAppData(true);
     })();
 </script>
 <!-- COMMENT MODAL -->
