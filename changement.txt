@@ -1,0 +1,847 @@
+Oui. Là, on peut clairement monter d’un cran.
+
+Ce que vous pointez est juste : dans un vrai outil de suivi, il faut distinguer trois cas :
+	•	Open : incident encore actif
+	•	Resolved : incident clôturé normalement
+	•	Deleted / Cancelled : incident retiré du flux, mais jamais effacé sans trace
+
+Et vous avez raison sur les deux manques :
+	•	le commentaire doit être consultable facilement
+	•	un incident doit pouvoir être retiré sans être résolu, avec motif obligatoire, puis envoyé dans un historique séparé
+
+Donc voici une version nettement meilleure dans la logique métier.
+Je vous donne directement les blocs à ajouter / remplacer dans votre mockup.html.
+
+⸻
+
+1) Ajoutez ces styles CSS
+
+À mettre dans votre <style>.
+
+<style>
+  .inline-add { display: flex; gap: 6px; margin-top: 4px; }
+  .inline-add input { flex: 1; padding: 6px 10px; }
+
+  .comment-preview {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #475569;
+  }
+
+  .text-muted { color: #6b7f92; }
+
+  .action-stack {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .delete-btn {
+    background: #fff;
+    color: #b91c1c;
+    border: 1.5px solid #fecaca;
+  }
+  .delete-btn:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+  }
+
+  .view-btn {
+    background: #fff;
+    color: #1e4a7a;
+    border: 1.5px solid #cbd5e1;
+  }
+  .view-btn:hover {
+    background: #f8fafc;
+  }
+
+  .deleted-badge {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+
+  .modal-card {
+    width: min(680px, 100%);
+    background: #fff;
+    border-radius: 22px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 60px rgba(15,23,42,0.18);
+    padding: 24px;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .modal-header h3 {
+    font-size: 1.2rem;
+    color: #0f3a5e;
+  }
+
+  .modal-body {
+    display: grid;
+    gap: 14px;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .danger-text {
+    color: #b91c1c;
+    font-weight: 600;
+  }
+
+  .archive-note {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 900px) {
+    .modal-card { padding: 18px; }
+  }
+</style>
+
+
+⸻
+
+2) Ajoutez deux modales dans le HTML
+
+Placez ceci juste avant </body>.
+
+<!-- COMMENT MODAL -->
+<div id="commentModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3><i class="fas fa-comment-dots"></i> Incident comment</h3>
+      <button type="button" id="closeCommentModalBtn" class="secondary small">Close</button>
+    </div>
+    <div class="modal-body">
+      <div class="archive-note" id="commentMeta">—</div>
+      <div>
+        <label style="margin-bottom:8px; display:block;">Comment</label>
+        <div id="commentModalText" style="white-space:pre-wrap; line-height:1.5; color:#334155;">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE / ARCHIVE MODAL -->
+<div id="deleteModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3><i class="fas fa-box-archive"></i> Remove incident from active workflow</h3>
+      <button type="button" id="closeDeleteModalBtn" class="secondary small">Close</button>
+    </div>
+    <div class="modal-body">
+      <div class="archive-note">
+        This incident will <strong>not</strong> be marked as resolved. It will be moved to the
+        <strong>Deleted / Archived</strong> list with a mandatory explanation.
+      </div>
+
+      <div>
+        <label style="margin-bottom:8px; display:block;">Incident</label>
+        <div id="deleteIncidentMeta" class="text-muted">—</div>
+      </div>
+
+      <div class="form-group">
+        <label for="deleteReason">Reason for removal *</label>
+        <textarea id="deleteReason" rows="4" placeholder="Example: created by mistake / already resolved but not updated / duplicate incident / invalid entry"></textarea>
+      </div>
+
+      <div class="danger-text">
+        This action preserves traceability but removes the incident from the active operational flow.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="cancelDeleteBtn" class="secondary">Cancel</button>
+      <button type="button" id="confirmDeleteBtn" class="delete-btn">Archive incident</button>
+    </div>
+  </div>
+</div>
+
+
+⸻
+
+3) Ajoutez une nouvelle section “Deleted / Archived Incidents”
+
+Placez ce bloc après la section Resolved History et avant le dashboard.
+
+<!-- DELETED / ARCHIVED HISTORY -->
+<div class="card">
+  <div class="card-header">
+    <h2><i class="fas fa-box-archive"></i> Deleted / Archived Incidents</h2>
+    <span id="deletedCountBadge" class="badge deleted-badge">0</span>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchDeleted" placeholder="🔍 Batch / Part / Supplier">
+    <select id="filterSupplierDeleted"><option value="">All suppliers</option></select>
+    <select id="filterBuyerDeleted"><option value="">All buyers</option></select>
+    <select id="filterErrorDeleted"><option value="">All errors</option></select>
+    <button type="button" id="clearDeletedFilters" class="secondary small">Clear</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table id="deletedTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Opened</th>
+          <th>Archived</th>
+          <th>Supplier</th>
+          <th>Buyer</th>
+          <th>Error</th>
+          <th>Batch</th>
+          <th>Part</th>
+          <th>Qty</th>
+          <th>Original Comment</th>
+          <th>Archive Reason</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+
+⸻
+
+4) Remplacez seed() par cette version enrichie
+
+function seed() {
+  const now = new Date();
+  const twoDays = new Date(now.getTime() - 50 * 60 * 60 * 1000);
+  const yest = new Date(now.getTime() - 26 * 60 * 60 * 1000);
+  const archivedAt = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+
+  incidents = [
+    {
+      id:'INC-1001',
+      batchNumber:'B2304-01',
+      partNumber:'AV-3342',
+      quantity:5,
+      operator:'Maria Lopez',
+      supplier:'AeroTech Supplies',
+      buyer:'Alice Brown',
+      errorType:'Missing documentation',
+      comment:'Manual missing',
+      createdAt: twoDays.toISOString(),
+      resolvedAt: new Date(twoDays.getTime()+32*60*60*1000).toISOString(),
+      deletedAt:null,
+      deletedReason:'',
+      status:'Resolved'
+    },
+    {
+      id:'INC-1002',
+      batchNumber:'B2401-09',
+      partNumber:'AV-7810',
+      quantity:2,
+      operator:'James Carter',
+      supplier:'SkyParts Intl',
+      buyer:'Mark Spencer',
+      errorType:'Damaged material',
+      comment:'Box crushed',
+      createdAt: yest.toISOString(),
+      resolvedAt: null,
+      deletedAt:null,
+      deletedReason:'',
+      status:'Open'
+    },
+    {
+      id:'INC-1003',
+      batchNumber:'B2399-22',
+      partNumber:'AV-5500',
+      quantity:10,
+      operator:'Linda Park',
+      supplier:'Avionics Plus',
+      buyer:'Sophia Reid',
+      errorType:'Wrong labeling',
+      comment:'Label does not match receiving paperwork',
+      createdAt: new Date(now.getTime()-12*60*60*1000).toISOString(),
+      resolvedAt: null,
+      deletedAt:null,
+      deletedReason:'',
+      status:'Open'
+    },
+    {
+      id:'INC-1004',
+      batchNumber:'B2412-45',
+      partNumber:'AV-9901',
+      quantity:1,
+      operator:'Robert Chen',
+      supplier:'Precision Avio',
+      buyer:'David Zhou',
+      errorType:'Quantity discrepancy',
+      comment:'Expected 3',
+      createdAt: new Date(now.getTime()-8*60*60*1000).toISOString(),
+      resolvedAt: new Date(now.getTime()-2*60*60*1000).toISOString(),
+      deletedAt:null,
+      deletedReason:'',
+      status:'Resolved'
+    },
+    {
+      id:'INC-1005',
+      batchNumber:'B2501-18',
+      partNumber:'AV-7721',
+      quantity:3,
+      operator:'Maria Lopez',
+      supplier:'FastComp',
+      buyer:'Alice Brown',
+      errorType:'SAP mismatch',
+      comment:'Wrong entry created at reception',
+      createdAt: new Date(now.getTime()-80*60*60*1000).toISOString(),
+      resolvedAt:null,
+      deletedAt: archivedAt.toISOString(),
+      deletedReason:'Created by mistake. Duplicate entry already tracked in another incident.',
+      status:'Deleted'
+    }
+  ];
+}
+
+
+⸻
+
+5) Remplacez loadIncidents() par cette version
+
+function loadIncidents() {
+  const s = localStorage.getItem(STORAGE_KEY);
+  if (s) {
+    try { incidents = JSON.parse(s); } catch(e) {}
+  }
+  if (!incidents.length) seed();
+
+  incidents = incidents.map(i => {
+    let status = 'Open';
+    if (i.deletedAt) status = 'Deleted';
+    else if (i.resolvedAt) status = 'Resolved';
+
+    return {
+      deletedAt: null,
+      deletedReason: '',
+      ...i,
+      status
+    };
+  });
+}
+
+
+⸻
+
+6) Remplacez populateSelects() par cette version
+
+Elle ajoute aussi les filtres de la section Deleted.
+
+function populateSelects(){
+  document.querySelectorAll('#operatorSelect, #supplierSelect, #buyerSelect, #errorTypeSelect')
+    .forEach(s => { s.innerHTML = '<option value="">-- Select --</option>'; });
+
+  operators.forEach(v => document.getElementById('operatorSelect').appendChild(new Option(v,v)));
+  suppliers.forEach(v => document.getElementById('supplierSelect').appendChild(new Option(v,v)));
+  buyers.forEach(v => document.getElementById('buyerSelect').appendChild(new Option(v,v)));
+  errorTypes.forEach(v => document.getElementById('errorTypeSelect').appendChild(new Option(v,v)));
+
+  ['filterSupplierOpen','filterSupplierResolved','filterSupplierDeleted'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">All suppliers</option>';
+    suppliers.forEach(s => sel.appendChild(new Option(s,s)));
+  });
+
+  ['filterBuyerOpen','filterBuyerResolved','filterBuyerDeleted'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">All buyers</option>';
+    buyers.forEach(b => sel.appendChild(new Option(b,b)));
+  });
+
+  ['filterErrorOpen','filterErrorResolved','filterErrorDeleted'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">All errors</option>';
+    errorTypes.forEach(e => sel.appendChild(new Option(e,e)));
+  });
+}
+
+
+⸻
+
+7) Ajoutez ces fonctions de modale
+
+À mettre dans le script, avant les fonctions de rendu ou juste après les helpers.
+
+let pendingDeleteId = null;
+
+function openCommentModalForIncident(metaText, commentText) {
+  const modal = document.getElementById('commentModal');
+  const meta = document.getElementById('commentMeta');
+  const text = document.getElementById('commentModalText');
+
+  if (!modal || !meta || !text) return;
+  meta.textContent = metaText || '—';
+  text.textContent = commentText || 'No comment recorded.';
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeCommentModalForIncident() {
+  const modal = document.getElementById('commentModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function openDeleteModal(id) {
+  const inc = incidents.find(i => i.id === id);
+  if (!inc) return;
+
+  pendingDeleteId = id;
+  const modal = document.getElementById('deleteModal');
+  const meta = document.getElementById('deleteIncidentMeta');
+  const reason = document.getElementById('deleteReason');
+
+  if (meta) {
+    meta.textContent = `${inc.id} · ${inc.supplier} · ${inc.batchNumber} · ${inc.partNumber}`;
+  }
+  if (reason) reason.value = '';
+
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeDeleteModal() {
+  pendingDeleteId = null;
+  const modal = document.getElementById('deleteModal');
+  const reason = document.getElementById('deleteReason');
+  if (reason) reason.value = '';
+  if (modal) {
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function archiveIncident() {
+  if (!pendingDeleteId) return;
+  const inc = incidents.find(i => i.id === pendingDeleteId);
+  const reason = (document.getElementById('deleteReason')?.value || '').trim();
+
+  if (!inc) return;
+  if (!reason) {
+    alert('A reason is required before archiving this incident.');
+    return;
+  }
+
+  inc.deletedAt = new Date().toISOString();
+  inc.deletedReason = reason;
+  inc.status = 'Deleted';
+
+  saveIncidents();
+  closeDeleteModal();
+  refreshAll();
+}
+
+
+⸻
+
+8) Remplacez renderOpen() par cette version enrichie
+
+Elle ajoute :
+	•	View comment
+	•	Archive
+
+function renderOpen(){
+  const tbody = document.querySelector('#openIncidentsTable tbody');
+  let open = incidents.filter(i => i.status === 'Open');
+
+  const sup = document.getElementById('filterSupplierOpen').value;
+  const buy = document.getElementById('filterBuyerOpen').value;
+  const err = document.getElementById('filterErrorOpen').value;
+
+  if (sup) open = open.filter(i => i.supplier === sup);
+  if (buy) open = open.filter(i => i.buyer === buy);
+  if (err) open = open.filter(i => i.errorType === err);
+
+  open.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+  tbody.innerHTML = '';
+
+  open.forEach(inc => {
+    const tr = document.createElement('tr');
+    const h = (new Date() - new Date(inc.createdAt)) / (1000*60*60);
+
+    tr.innerHTML = `
+      <td><code>${inc.id}</code></td>
+      <td>${new Date(inc.createdAt).toLocaleString()}</td>
+      <td>${inc.operator}</td>
+      <td>${inc.supplier}</td>
+      <td>${inc.buyer}</td>
+      <td>${inc.batchNumber}</td>
+      <td>${inc.partNumber}</td>
+      <td>${inc.quantity}</td>
+      <td>${inc.errorType}</td>
+      <td><span class="status-badge ${getDurationClass(h)}">${formatDuration(inc.createdAt,null)}</span></td>
+      <td>
+        <div class="action-stack">
+          <button class="view-btn small" data-view-comment="${inc.id}"><i class="fas fa-eye"></i> Comment</button>
+          <button class="resolve-btn small" data-id="${inc.id}"><i class="fas fa-check"></i> Resolve</button>
+          <button class="delete-btn small" data-delete-id="${inc.id}"><i class="fas fa-box-archive"></i> Archive</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.resolve-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      if (!confirm(`Resolve incident ${b.dataset.id}?`)) return;
+      resolveIncident(b.dataset.id);
+    });
+  });
+
+  document.querySelectorAll('[data-delete-id]').forEach(b => {
+    b.addEventListener('click', () => openDeleteModal(b.dataset.deleteId));
+  });
+
+  document.querySelectorAll('[data-view-comment]').forEach(b => {
+    b.addEventListener('click', () => {
+      const inc = incidents.find(i => i.id === b.dataset.viewComment);
+      if (!inc) return;
+      openCommentModalForIncident(
+        `${inc.id} · ${inc.supplier} · ${inc.batchNumber} · ${inc.partNumber}`,
+        inc.comment
+      );
+    });
+  });
+
+  document.getElementById('openCountBadge').textContent = open.length;
+}
+
+
+⸻
+
+9) Remplacez renderResolved() par cette version
+
+Le commentaire devient visible/consultable.
+
+function renderResolved(){
+  const tbody = document.querySelector('#resolvedTable tbody');
+  const list = getFilteredResolved();
+  lastResolvedFiltered = list;
+
+  tbody.innerHTML = '';
+
+  list.forEach(inc => {
+    const dur = (new Date(inc.resolvedAt) - new Date(inc.createdAt)) / (1000*60*60);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${inc.id}</td>
+      <td>${new Date(inc.createdAt).toLocaleString()}</td>
+      <td>${new Date(inc.resolvedAt).toLocaleString()}</td>
+      <td>${dur.toFixed(1)}</td>
+      <td>${inc.supplier}</td>
+      <td>${inc.buyer}</td>
+      <td>${inc.errorType}</td>
+      <td>${inc.batchNumber}</td>
+      <td>${inc.partNumber}</td>
+      <td>${inc.quantity}</td>
+      <td>${inc.operator}</td>
+      <td>
+        <div class="action-stack">
+          <span class="comment-preview">${inc.comment || '—'}</span>
+          <button class="view-btn small" data-view-comment="${inc.id}"><i class="fas fa-eye"></i> View</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('#resolvedTable [data-view-comment]').forEach(b => {
+    b.addEventListener('click', () => {
+      const inc = incidents.find(i => i.id === b.dataset.viewComment);
+      if (!inc) return;
+      openCommentModalForIncident(
+        `${inc.id} · Resolved · ${inc.supplier}`,
+        inc.comment
+      );
+    });
+  });
+
+  document.getElementById('resolvedCountBadge').textContent = list.length;
+}
+
+
+⸻
+
+10) Ajoutez ces fonctions pour l’historique Deleted
+
+function getFilteredDeleted(){
+  let deleted = incidents.filter(i => i.status === 'Deleted');
+
+  const search = (document.getElementById('searchDeleted')?.value || '').toLowerCase();
+  const sup = document.getElementById('filterSupplierDeleted')?.value;
+  const buy = document.getElementById('filterBuyerDeleted')?.value;
+  const err = document.getElementById('filterErrorDeleted')?.value;
+
+  if (sup) deleted = deleted.filter(i => i.supplier === sup);
+  if (buy) deleted = deleted.filter(i => i.buyer === buy);
+  if (err) deleted = deleted.filter(i => i.errorType === err);
+
+  if (search) {
+    deleted = deleted.filter(i =>
+      i.batchNumber.toLowerCase().includes(search) ||
+      i.partNumber.toLowerCase().includes(search) ||
+      i.supplier.toLowerCase().includes(search)
+    );
+  }
+
+  return deleted.sort((a,b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+}
+
+function renderDeleted(){
+  const tbody = document.querySelector('#deletedTable tbody');
+  if (!tbody) return;
+
+  const list = getFilteredDeleted();
+  tbody.innerHTML = '';
+
+  list.forEach(inc => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${inc.id}</td>
+      <td>${new Date(inc.createdAt).toLocaleString()}</td>
+      <td>${inc.deletedAt ? new Date(inc.deletedAt).toLocaleString() : '—'}</td>
+      <td>${inc.supplier}</td>
+      <td>${inc.buyer}</td>
+      <td>${inc.errorType}</td>
+      <td>${inc.batchNumber}</td>
+      <td>${inc.partNumber}</td>
+      <td>${inc.quantity}</td>
+      <td>
+        <div class="action-stack">
+          <span class="comment-preview">${inc.comment || '—'}</span>
+          <button class="view-btn small" data-view-comment="${inc.id}"><i class="fas fa-eye"></i> View</button>
+        </div>
+      </td>
+      <td>
+        <div class="action-stack">
+          <span class="comment-preview">${inc.deletedReason || '—'}</span>
+          <button class="view-btn small" data-view-delete-reason="${inc.id}"><i class="fas fa-eye"></i> View</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('#deletedTable [data-view-comment]').forEach(b => {
+    b.addEventListener('click', () => {
+      const inc = incidents.find(i => i.id === b.dataset.viewComment);
+      if (!inc) return;
+      openCommentModalForIncident(
+        `${inc.id} · Original comment`,
+        inc.comment
+      );
+    });
+  });
+
+  document.querySelectorAll('#deletedTable [data-view-delete-reason]').forEach(b => {
+    b.addEventListener('click', () => {
+      const inc = incidents.find(i => i.id === b.dataset.viewDeleteReason);
+      if (!inc) return;
+      openCommentModalForIncident(
+        `${inc.id} · Archive reason`,
+        inc.deletedReason
+      );
+    });
+  });
+
+  document.getElementById('deletedCountBadge').textContent = list.length;
+}
+
+
+⸻
+
+11) Remplacez renderDashboard() par cette version
+
+Elle exclut les incidents supprimés du pilotage principal, ce qui est plus propre.
+
+function renderDashboard(){
+  const activePool = incidents.filter(i => i.status !== 'Deleted');
+  const filtered = filterByPeriod(activePool);
+  const resolvedFiltered = filtered.filter(i => i.status === 'Resolved');
+  const openCount = filtered.filter(i => i.status === 'Open').length;
+
+  let avg = 0, median = 0, totalBlocked = 0;
+
+  if (resolvedFiltered.length){
+    const durs = resolvedFiltered.map(i => (new Date(i.resolvedAt) - new Date(i.createdAt)) / (1000*60*60));
+    avg = durs.reduce((a,b) => a+b, 0) / durs.length;
+    durs.sort((a,b) => a-b);
+    const mid = Math.floor(durs.length / 2);
+    median = durs.length % 2 ? durs[mid] : (durs[mid-1] + durs[mid]) / 2;
+    totalBlocked = durs.reduce((a,b) => a+b, 0);
+  }
+
+  document.getElementById('kpiContainer').innerHTML = `
+    <div class="kpi-card"><div class="kpi-value">${filtered.length}</div><div class="kpi-label">Total incidents</div></div>
+    <div class="kpi-card"><div class="kpi-value">${openCount}</div><div class="kpi-label">Open</div></div>
+    <div class="kpi-card"><div class="kpi-value">${avg.toFixed(1)} h</div><div class="kpi-label">Avg resolution</div></div>
+    <div class="kpi-card"><div class="kpi-value">${median.toFixed(1)} h</div><div class="kpi-label">Median resolution</div></div>
+    <div class="kpi-card"><div class="kpi-value">${totalBlocked.toFixed(0)} h</div><div class="kpi-label">Total blocked time</div></div>
+  `;
+
+  updateCharts(filtered, resolvedFiltered);
+  updateSummaryTables(filtered, resolvedFiltered);
+  updateInsightBox(filtered, resolvedFiltered);
+}
+
+
+⸻
+
+12) Remplacez refreshAll() par cette version
+
+function refreshAll(){
+  populateSelects();
+  renderOpen();
+  renderResolved();
+  renderDeleted();
+  renderDashboard();
+  updateListDisplay();
+}
+
+
+⸻
+
+13) Ajoutez ces event listeners
+
+À mettre dans la zone des listeners.
+
+document.getElementById('closeCommentModalBtn')?.addEventListener('click', closeCommentModalForIncident);
+document.getElementById('commentModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'commentModal') closeCommentModalForIncident();
+});
+
+document.getElementById('closeDeleteModalBtn')?.addEventListener('click', closeDeleteModal);
+document.getElementById('cancelDeleteBtn')?.addEventListener('click', closeDeleteModal);
+document.getElementById('confirmDeleteBtn')?.addEventListener('click', archiveIncident);
+document.getElementById('deleteModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'deleteModal') closeDeleteModal();
+});
+
+document.getElementById('searchDeleted')?.addEventListener('input', renderDeleted);
+document.getElementById('filterSupplierDeleted')?.addEventListener('change', renderDeleted);
+document.getElementById('filterBuyerDeleted')?.addEventListener('change', renderDeleted);
+document.getElementById('filterErrorDeleted')?.addEventListener('change', renderDeleted);
+
+document.getElementById('clearDeletedFilters')?.addEventListener('click', () => {
+  document.getElementById('searchDeleted').value = '';
+  document.getElementById('filterSupplierDeleted').value = '';
+  document.getElementById('filterBuyerDeleted').value = '';
+  document.getElementById('filterErrorDeleted').value = '';
+  renderDeleted();
+});
+
+
+⸻
+
+14) Remplacez la création d’incident par cette version enrichie
+
+Elle initialise bien les nouveaux champs.
+
+document.getElementById('incidentForm').addEventListener('submit', e => {
+  e.preventDefault();
+
+  const op = document.getElementById('operatorSelect').value;
+  const sup = document.getElementById('supplierSelect').value;
+  const batch = document.getElementById('batchNumber').value.trim();
+  const part = document.getElementById('partNumber').value.trim();
+  const qty = +document.getElementById('quantity').value;
+  const buyer = document.getElementById('buyerSelect').value;
+  const err = document.getElementById('errorTypeSelect').value;
+  const comment = document.getElementById('comment').value.trim();
+
+  if (!op || !sup || !batch || !part || !qty || !buyer || !err) {
+    alert('All required fields must be filled.');
+    return;
+  }
+
+  const dupId = checkDuplicate(batch, part, sup, err);
+  if (dupId && !confirm(`Similar open incident ${dupId} exists. Create anyway?`)) return;
+
+  incidents.push({
+    id: generateId(),
+    batchNumber: batch,
+    partNumber: part,
+    quantity: qty,
+    operator: op,
+    supplier: sup,
+    buyer,
+    errorType: err,
+    comment,
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+    deletedAt: null,
+    deletedReason: '',
+    status: 'Open'
+  });
+
+  saveIncidents();
+  e.target.reset();
+  refreshAll();
+});
+
+
+⸻
+
+Ce que cette version améliore vraiment
+
+Là, on n’est plus juste dans une amélioration visuelle.
+On améliore la qualité du système :
+
+1. Traçabilité meilleure
+
+Un incident retiré n’est plus “effacé”.
+Il est archivé avec motif.
+
+2. Lecture plus réaliste
+
+Le commentaire n’est plus perdu dans une cellule minuscule.
+Il devient consultable proprement.
+
+3. Robustesse métier
+
+Vous distinguez désormais :
+	•	incident réellement résolu,
+	•	incident retiré du flux,
+	•	incident toujours ouvert.
+
+C’est beaucoup plus crédible.
+
+4. Pilotage plus propre
+
+Le dashboard principal ne mélange pas les incidents supprimés avec les incidents réellement opérationnels.
