@@ -601,6 +601,177 @@
         }
 
         // DASHBOARD
+        function getCurrentPeriodLabel() {
+            switch (currentPeriod) {
+                case '7': return 'Last 7 days';
+                case '30': return 'Last 30 days';
+                case '90': return 'Last 90 days';
+                default: return 'All time';
+            }
+        }
+
+        function getChartImage(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            return canvas ? canvas.toDataURL('image/png') : '';
+        }
+
+        function escapePrintHtml(value = '') {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function buildPrintableInsightItems(filtered, resolvedFiltered) {
+            const openSorted = filtered.filter(i=>i.status==='Open').sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+            const oldest = openSorted[0];
+            const supCount = new Map();
+            filtered.forEach(i=>supCount.set(i.supplier,(supCount.get(i.supplier)||0)+1));
+            const topSup = Array.from(supCount.entries()).sort((a,b)=>b[1]-a[1])[0];
+            const errAvg = new Map();
+            resolvedFiltered.forEach(i=>{
+                const d=(new Date(i.resolvedAt)-new Date(i.createdAt))/(1000*60*60);
+                getIncidentErrorReasons(i).forEach((reason)=>{
+                    if(!errAvg.has(reason)) errAvg.set(reason,{sum:0,count:0});
+                    const r=errAvg.get(reason);
+                    r.sum+=d;
+                    r.count++;
+                });
+            });
+            let worstErr='—', worstAvg=0;
+            errAvg.forEach((v,k)=>{
+                const avg=v.sum/v.count;
+                if(avg>worstAvg){
+                    worstAvg=avg;
+                    worstErr=k;
+                }
+            });
+
+            return [
+                { label: 'Top supplier', value: topSup ? `${topSup[0]} (${topSup[1]})` : '—' },
+                { label: 'Longest avg resolution', value: worstErr === '—' ? '—' : `${worstErr} (${worstAvg.toFixed(1)} h)` },
+                { label: 'Oldest open incident', value: oldest ? `${oldest.id} · ${formatDuration(oldest.createdAt,null)}` : 'None' }
+            ];
+        }
+
+        function printAnalyticsReport() {
+            const activePool = incidents.filter(i=>i.status!=='Deleted');
+            const filtered = filterByPeriod(activePool);
+            const resolvedFiltered = filtered.filter(i=>i.status==='Resolved');
+            const openCount = filtered.filter(i=>i.status==='Open').length;
+            let avg=0, median=0, totalBlocked=0;
+            if(resolvedFiltered.length){
+                const durs=resolvedFiltered.map(i=>(new Date(i.resolvedAt)-new Date(i.createdAt))/(1000*60*60)).sort((a,b)=>a-b);
+                avg=durs.reduce((a,b)=>a+b,0)/durs.length;
+                const mid=Math.floor(durs.length/2);
+                median=durs.length%2?durs[mid]:(durs[mid-1]+durs[mid])/2;
+                totalBlocked=durs.reduce((a,b)=>a+b,0);
+            }
+
+            const summaryTables = [
+                { title: 'Supplier details', html: document.getElementById('supplierSummaryTable')?.innerHTML || '' },
+                { title: 'Error analysis', html: document.getElementById('errorSummaryTable')?.innerHTML || '' },
+                { title: 'Buyer details', html: document.getElementById('buyerSummaryTable')?.innerHTML || '' }
+            ];
+
+            const chartsToPrint = [
+                { title: 'Incidents by supplier', image: getChartImage('chartSupplier') },
+                { title: 'Incidents by error type', image: getChartImage('chartErrorType') },
+                { title: 'Incidents by buyer', image: getChartImage('chartBuyer') },
+                { title: 'Blocked hours by supplier', image: getChartImage('chartTimeLostSupplier') },
+                { title: 'Average resolution by error type', image: getChartImage('chartAvgTimeError') },
+                { title: 'Incidents over time', image: getChartImage('chartOverTime') }
+            ];
+
+            const insightItems = buildPrintableInsightItems(filtered, resolvedFiltered);
+            const reportWindow = window.open('', '_blank', 'width=1280,height=900');
+            if (!reportWindow) {
+                setStatus('Popup blocked. Allow popups to print the analytics report.', 'error');
+                return;
+            }
+
+            reportWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>THALES Analytics Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #0f172a; margin: 32px; }
+        h1, h2, h3 { margin: 0 0 12px; color: #0f3a5e; }
+        .meta { margin-bottom: 24px; color: #475569; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 20px 0 28px; }
+        .kpi-card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; background: #f8fbff; }
+        .kpi-value { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+        .kpi-label { font-size: 12px; text-transform: uppercase; color: #475569; }
+        .insight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 28px; }
+        .insight-card { border-left: 4px solid #2563eb; background: #eff6ff; padding: 14px; border-radius: 10px; }
+        .insight-card strong { display: block; font-size: 12px; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
+        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 28px; }
+        .chart-card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; break-inside: avoid; }
+        .chart-card img { width: 100%; height: auto; display: block; }
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+        .summary-card { break-inside: avoid; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+        th { background: #eff6ff; }
+        @media print {
+            body { margin: 12mm; }
+            .charts-grid, .summary-grid, .kpi-grid, .insight-grid { gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <h1>THALES Analytics Report</h1>
+    <div class="meta">
+        <div><strong>Timeline:</strong> ${escapePrintHtml(getCurrentPeriodLabel())}</div>
+        <div><strong>Generated:</strong> ${escapePrintHtml(new Date().toLocaleString())}</div>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-value">${filtered.length}</div><div class="kpi-label">Total incidents</div></div>
+        <div class="kpi-card"><div class="kpi-value">${openCount}</div><div class="kpi-label">Open</div></div>
+        <div class="kpi-card"><div class="kpi-value">${avg.toFixed(1)} h</div><div class="kpi-label">Avg resolution</div></div>
+        <div class="kpi-card"><div class="kpi-value">${median.toFixed(1)} h</div><div class="kpi-label">Median resolution</div></div>
+        <div class="kpi-card"><div class="kpi-value">${totalBlocked.toFixed(0)} h</div><div class="kpi-label">Total blocked time</div></div>
+    </div>
+
+    <div class="insight-grid">
+        ${insightItems.map((item) => `
+            <div class="insight-card">
+                <strong>${escapePrintHtml(item.label)}</strong>
+                <div>${escapePrintHtml(item.value)}</div>
+            </div>
+        `).join('')}
+    </div>
+
+    <h2>Charts</h2>
+    <div class="charts-grid">
+        ${chartsToPrint.map((chart) => `
+            <div class="chart-card">
+                <h3>${escapePrintHtml(chart.title)}</h3>
+                ${chart.image ? `<img src="${chart.image}" alt="${escapePrintHtml(chart.title)}">` : '<div>No chart available.</div>'}
+            </div>
+        `).join('')}
+    </div>
+
+    <h2>Summary Tables</h2>
+    <div class="summary-grid">
+        ${summaryTables.map((section) => `
+            <div class="summary-card">
+                <h3>${escapePrintHtml(section.title)}</h3>
+                ${section.html || '<div>No data available.</div>'}
+            </div>
+        `).join('')}
+    </div>
+</body>
+</html>`);
+            reportWindow.document.close();
+            reportWindow.focus();
+            reportWindow.print();
+        }
+
         function renderDashboard(){
             const activePool=incidents.filter(i=>i.status!=='Deleted');
             const filtered=filterByPeriod(activePool);
@@ -744,6 +915,7 @@
                 renderPendingRecipients();
             }
         });
+        document.getElementById('printAnalyticsBtn')?.addEventListener('click', printAnalyticsReport);
         document.getElementById('incidentAttachments')?.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files || []);
             if (!files.length) return;

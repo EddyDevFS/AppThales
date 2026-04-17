@@ -197,11 +197,14 @@
     <div class="card">
         <div class="card-header">
             <h2><i class="fas fa-chart-bar"></i> Analytics Dashboard</h2>
-            <div class="period-selector">
-                <button class="period-btn active" data-period="all">All time</button>
-                <button class="period-btn" data-period="7">Last 7d</button>
-                <button class="period-btn" data-period="30">Last 30d</button>
-                <button class="period-btn" data-period="90">Last 90d</button>
+            <div class="analytics-actions">
+                <div class="period-selector">
+                    <button class="period-btn active" data-period="all">All time</button>
+                    <button class="period-btn" data-period="7">Last 7d</button>
+                    <button class="period-btn" data-period="30">Last 30d</button>
+                    <button class="period-btn" data-period="90">Last 90d</button>
+                </div>
+                <button type="button" id="printAnalyticsBtn" class="secondary small"><i class="fas fa-print"></i> Print Report</button>
             </div>
         </div>
         <!-- KPI row -->

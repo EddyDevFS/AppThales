@@ -69,8 +69,10 @@
         .insight-item { display: flex; flex-direction: column; }
         .insight-label { font-size: 0.7rem; color: #4b6589; text-transform: uppercase; }
         .insight-value { font-weight: 700; font-size: 1.3rem; }
+        .analytics-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
         .period-selector { display: inline-flex; background: white; border-radius: 30px; padding: 4px; border:1px solid #dde3e9; }
-        .period-btn { background: transparent; border: none; padding: 8px 16px; border-radius: 30px; font-weight: 500; cursor: pointer; }
+        .period-btn { background: #ffffff; color: #1e4a7a; border: none; padding: 8px 16px; border-radius: 30px; font-weight: 600; cursor: pointer; }
+        .period-btn:hover { background: #eff6ff; color: #0f3a5e; }
         .period-btn.active { background: #1e4a7a; color: white; }
         .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
         .summary-section { min-width: 0; }
@@ -87,6 +89,7 @@
             .row-split, .charts-row, .kpi-grid, .summary-grid { grid-template-columns: 1fr; }
             .incident-card .form-grid { grid-template-columns: 1fr; }
             .incident-card .form-group.full-width { grid-column: span 1; }
+            .analytics-actions { align-items: stretch; }
             body { padding: 16px; }
         }
 
