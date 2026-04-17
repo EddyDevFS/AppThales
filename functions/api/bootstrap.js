@@ -1,10 +1,11 @@
-import { json, listIncidents, listReferences } from "./_lib.js";
+import { getSettings, json, listIncidents, listReferences } from "./_lib.js";
 
 export async function onRequestGet(context) {
-    const [references, incidents] = await Promise.all([
+    const [references, incidents, settings] = await Promise.all([
         listReferences(context.env),
-        listIncidents(context.env)
+        listIncidents(context.env),
+        getSettings(context.env)
     ]);
 
-    return json({ references, incidents });
+    return json({ references, incidents, settings });
 }

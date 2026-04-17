@@ -2,10 +2,299 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=./mockup.html">
-    <title>Redirecting…</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thales Avionics Orlando · Receiving Incident Tracker (v3 final)</title>
+    <script src="./assets/vendor/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="./assets/vendor/fontawesome.min.css">
+    <link rel="stylesheet" href="./assets/vendor/solid.min.css">
+    <link rel="stylesheet" href="./assets/vendor/brands.min.css">
+        <link rel="stylesheet" href="./assets/app.css">
 </head>
 <body>
-    <p>Redirecting to <a href="./mockup.html">the app</a>…</p>
+<h1><i class="fas fa-clipboard-list" style="color:#2563eb;"></i> Receiving Incident Tracker <span class="badge">Thales Avionics · Orlando · v3</span></h1>
+<div class="subhead">Immediate logging · blockage tracking · actionable analytics</div>
+<div id="appStatus" class="app-status"></div>
+
+<div class="app-grid">
+    <!-- NEW INCIDENT + OPEN -->
+    <div class="row-split">
+        <div class="card">
+            <div class="card-header"><h2><i class="fas fa-plus-circle"></i> New Incident</h2></div>
+            <form id="incidentForm">
+                <div class="form-grid">
+                    <div class="form-group"><label>Operator *</label><select id="operatorSelect" required></select></div>
+                    <div class="form-group"><label>Supplier *</label><select id="supplierSelect" required></select></div>
+                    <div class="form-group"><label>Batch Number *</label><input id="batchNumber" placeholder="BATCH-2403" required></div>
+                    <div class="form-group"><label>Part Number *</label><input id="partNumber" placeholder="AV-8832-X" required></div>
+                    <div class="form-group"><label>Qty affected *</label><input type="number" id="quantity" min="1" value="1" required></div>
+                    <div class="form-group"><label>Buyer *</label><select id="buyerSelect" required></select></div>
+                    <div class="form-group full-width">
+                        <label>Rejection Reasons *</label>
+                        <div class="inline-add">
+                            <select id="errorTypeSelect"></select>
+                            <button type="button" id="addErrorTypeToIncidentBtn" class="small secondary">+ Add Reason</button>
+                        </div>
+                        <div id="selectedErrorTypeList" class="attachment-list" style="margin-top:10px;"></div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Recipients *</label>
+                        <div class="inline-add">
+                            <select id="recipientSelect"></select>
+                            <button type="button" id="addRecipientToIncidentBtn" class="small secondary">+ Add Recipient</button>
+                        </div>
+                        <div id="selectedRecipientList" class="attachment-list" style="margin-top:10px;"></div>
+                        <div class="attachment-help">Add one or more recipients to this incident email draft.</div>
+                    </div>
+                    <div class="form-group full-width"><label>Comment</label><textarea id="comment" rows="2"></textarea></div>
+                    <div class="form-group full-width"><label>Reference / Evidence</label><textarea id="referenceNotes" rows="3" placeholder="Paste references, copied content, traceability notes, or any structured evidence separate from the comment."></textarea></div>
+                    <div class="form-group full-width">
+                        <label>Attachments</label>
+                        <input id="incidentAttachments" type="file" multiple>
+                        <div id="pendingAttachmentList" class="attachment-list" style="margin-top:10px;"></div>
+                        <div class="attachment-help">Attach screenshots, files, or evidence documents. Files stay stored locally with the incident.</div>
+                    </div>
+                </div>
+                <div style="margin-top:20px; display:flex; gap:10px;">
+                    <button type="submit" style="flex:1"><i class="fas fa-save"></i> Create Incident</button>
+                    <button type="button" id="toggleListManagerBtn" class="secondary small"><i class="fas fa-gear"></i> Manage Lists</button>
+                </div>
+            </form>
+            <div id="listManagerPanel" style="display:none; margin-top:20px; background:#f8fafc; border-radius:16px; padding:16px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                    <div><strong>Operators</strong><div class="inline-add"><input id="newOperatorInput" placeholder="New"><button type="button" id="addOperatorBtn" class="small secondary"><i class="fas fa-plus"></i></button></div><ul id="operatorListDisplay" style="font-size:0.8rem;"></ul></div>
+                    <div><strong>Suppliers</strong><div class="inline-add"><input id="newSupplierInput" placeholder="New"><button type="button" id="addSupplierBtn" class="small secondary"><i class="fas fa-plus"></i></button></div><ul id="supplierListDisplay"></ul></div>
+                    <div><strong>Buyers</strong><div class="inline-add"><input id="newBuyerInput" placeholder="New"><button type="button" id="addBuyerBtn" class="small secondary"><i class="fas fa-plus"></i></button></div><ul id="buyerListDisplay"></ul></div>
+                    <div><strong>Error Types</strong><div class="inline-add"><input id="newErrorInput" placeholder="New"><button type="button" id="addErrorBtn" class="small secondary"><i class="fas fa-plus"></i></button></div><ul id="errorListDisplay"></ul></div>
+                    <div style="grid-column: span 2;">
+                        <strong>Recipients</strong>
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1.4fr auto; gap:6px; margin-top:6px;">
+                            <input id="newRecipientFirstName" placeholder="First name">
+                            <input id="newRecipientLastName" placeholder="Last name">
+                            <input id="newRecipientEmail" placeholder="email@example.com">
+                            <button type="button" id="addRecipientBtn" class="small secondary"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <ul id="recipientListDisplay"></ul>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <strong>Email Draft Intro</strong>
+                        <textarea id="emailIntroInput" rows="4" style="margin-top:8px;" placeholder="Generic text inserted after Bonjour in the Outlook draft."></textarea>
+                        <div style="margin-top:8px; display:flex; justify-content:flex-end;">
+                            <button type="button" id="saveEmailIntroBtn" class="small secondary">Save Email Intro</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h2><i class="fas fa-folder-open"></i> Open Incidents</h2><span id="openCountBadge" class="badge">0</span></div>
+            <div class="filter-bar">
+                <select id="filterSupplierOpen"><option value="">All suppliers</option></select>
+                <select id="filterBuyerOpen"><option value="">All buyers</option></select>
+                <select id="filterErrorOpen"><option value="">All errors</option></select>
+                <button type="button" id="clearFiltersOpen" class="secondary small">Clear</button>
+            </div>
+            <div class="table-wrapper">
+                <table id="openIncidentsTable"><thead><tr><th>ID</th><th>Opened</th><th>Operator</th><th>Supplier</th><th>Buyer</th><th>Batch</th><th>Part</th><th>Qty</th><th>Error</th><th>Open duration</th><th></th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-meta">
+                <div id="openResultsSummary" class="results-summary">0 results</div>
+                <div class="pagination-controls">
+                    <label for="openPageSize">Rows</label>
+                    <select id="openPageSize" data-pagination-size="open">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <button type="button" class="secondary small" data-page-action="prev" data-page-target="open">Prev</button>
+                    <span id="openPageIndicator" class="page-indicator">Page 1 / 1</span>
+                    <button type="button" class="secondary small" data-page-action="next" data-page-target="open">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESOLVED HISTORY -->
+    <div class="card">
+        <div class="card-header"><h2><i class="fas fa-check-circle"></i> Resolved History</h2><span id="resolvedCountBadge" class="badge">0</span></div>
+        <div class="filter-bar">
+            <input type="text" id="searchResolved" placeholder="🔍 Batch/Part/Supplier">
+            <select id="filterSupplierResolved"><option value="">All suppliers</option></select>
+            <select id="filterBuyerResolved"><option value="">All buyers</option></select>
+            <select id="filterErrorResolved"><option value="">All errors</option></select>
+            <button type="button" id="clearResolvedFilters" class="secondary small">Clear</button>
+            <button type="button" id="exportFilteredCsvBtn" class="secondary small"><i class="fas fa-download"></i> Export visible</button>
+        </div>
+        <div class="table-wrapper">
+            <table id="resolvedTable"><thead><tr><th>ID</th><th>Opened</th><th>Resolved</th><th>Duration(h)</th><th>Supplier</th><th>Buyer</th><th>Error</th><th>Batch</th><th>Part</th><th>Qty</th><th>Operator</th><th>Comment</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="table-meta">
+            <div id="resolvedResultsSummary" class="results-summary">0 results</div>
+            <div class="pagination-controls">
+                <label for="resolvedPageSize">Rows</label>
+                <select id="resolvedPageSize" data-pagination-size="resolved">
+                    <option value="10">10</option>
+                    <option value="25" selected>25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <button type="button" class="secondary small" data-page-action="prev" data-page-target="resolved">Prev</button>
+                <span id="resolvedPageIndicator" class="page-indicator">Page 1 / 1</span>
+                <button type="button" class="secondary small" data-page-action="next" data-page-target="resolved">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DELETED / ARCHIVED HISTORY -->
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-box-archive"></i> Deleted / Archived Incidents</h2>
+            <span id="deletedCountBadge" class="badge deleted-badge">0</span>
+        </div>
+        <div class="filter-bar">
+            <input type="text" id="searchDeleted" placeholder="🔍 Batch / Part / Supplier">
+            <select id="filterSupplierDeleted"><option value="">All suppliers</option></select>
+            <select id="filterBuyerDeleted"><option value="">All buyers</option></select>
+            <select id="filterErrorDeleted"><option value="">All errors</option></select>
+            <button type="button" id="clearDeletedFilters" class="secondary small">Clear</button>
+        </div>
+        <div class="table-wrapper">
+            <table id="deletedTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Opened</th>
+                        <th>Archived</th>
+                        <th>Supplier</th>
+                        <th>Buyer</th>
+                        <th>Error</th>
+                        <th>Batch</th>
+                        <th>Part</th>
+                        <th>Qty</th>
+                        <th>Original Comment</th>
+                        <th>Archive Reason</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="table-meta">
+            <div id="deletedResultsSummary" class="results-summary">0 results</div>
+            <div class="pagination-controls">
+                <label for="deletedPageSize">Rows</label>
+                <select id="deletedPageSize" data-pagination-size="deleted">
+                    <option value="10">10</option>
+                    <option value="25" selected>25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <button type="button" class="secondary small" data-page-action="prev" data-page-target="deleted">Prev</button>
+                <span id="deletedPageIndicator" class="page-indicator">Page 1 / 1</span>
+                <button type="button" class="secondary small" data-page-action="next" data-page-target="deleted">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-chart-bar"></i> Analytics Dashboard</h2>
+            <div class="period-selector">
+                <button class="period-btn active" data-period="all">All time</button>
+                <button class="period-btn" data-period="7">Last 7d</button>
+                <button class="period-btn" data-period="30">Last 30d</button>
+                <button class="period-btn" data-period="90">Last 90d</button>
+            </div>
+        </div>
+        <!-- KPI row -->
+        <div class="kpi-grid" id="kpiContainer"></div>
+        <!-- insight box -->
+        <div class="insight-box" id="insightBox"></div>
+        <!-- charts: 3 columns -->
+        <div class="charts-row">
+            <div class="chart-container"><canvas id="chartSupplier"></canvas></div>
+            <div class="chart-container"><canvas id="chartErrorType"></canvas></div>
+            <div class="chart-container"><canvas id="chartBuyer"></canvas></div>
+        </div>
+        <div class="charts-row">
+            <div class="chart-container"><canvas id="chartTimeLostSupplier"></canvas></div>
+            <div class="chart-container"><canvas id="chartAvgTimeError"></canvas></div>
+            <div class="chart-container"><canvas id="chartOverTime"></canvas></div>
+        </div>
+        <!-- summary tables -->
+        <div class="summary-grid">
+            <div class="summary-section"><strong class="summary-title">Supplier details</strong><div id="supplierSummaryTable" class="table-wrapper"></div></div>
+            <div class="summary-section"><strong class="summary-title">Error analysis</strong><div id="errorSummaryTable" class="table-wrapper"></div></div>
+            <div class="summary-section"><strong class="summary-title">Buyer details</strong><div id="buyerSummaryTable" class="table-wrapper"></div></div>
+        </div>
+        <div class="text-muted" style="margin-top:12px; font-size:0.75rem;">* Period filter applies to creation date. Averages based only on resolved incidents.</div>
+    </div>
+</div>
+
+<!-- COMMENT MODAL -->
+<div id="commentModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="fas fa-comment-dots"></i> Incident details</h3>
+            <button type="button" id="closeCommentModalBtn" class="secondary small">Close</button>
+        </div>
+        <div class="modal-body">
+            <div class="archive-note" id="commentMeta">—</div>
+            <div class="detail-block">
+                <label style="margin-bottom:8px; display:block;">Comment</label>
+                <div id="commentModalText" style="white-space:pre-wrap; line-height:1.5; color:#334155;">—</div>
+            </div>
+            <div class="detail-block">
+                <label style="margin-bottom:8px; display:block;">Reference / Evidence</label>
+                <div id="commentReferenceText" style="white-space:pre-wrap; line-height:1.5; color:#334155;">—</div>
+            </div>
+            <div class="detail-block">
+                <label style="margin-bottom:8px; display:block;">Recipients</label>
+                <div id="commentRecipientsText" style="white-space:pre-wrap; line-height:1.5; color:#334155;">—</div>
+            </div>
+            <div id="commentArchiveReasonBlock" class="detail-block" style="display:none;">
+                <label style="margin-bottom:8px; display:block;">Archive reason</label>
+                <div id="commentArchiveReasonText" style="white-space:pre-wrap; line-height:1.5; color:#334155;">—</div>
+            </div>
+            <div class="detail-block">
+                <label style="margin-bottom:8px; display:block;">Attachments</label>
+                <div id="commentAttachmentList" class="attachment-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DELETE / ARCHIVE MODAL -->
+<div id="deleteModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="fas fa-box-archive"></i> Remove incident from active workflow</h3>
+            <button type="button" id="closeDeleteModalBtn" class="secondary small">Close</button>
+        </div>
+        <div class="modal-body">
+            <div class="archive-note">
+                This incident will <strong>not</strong> be marked as resolved. It will be moved to the
+                <strong>Deleted / Archived</strong> list with a mandatory explanation.
+            </div>
+            <div>
+                <label style="margin-bottom:8px; display:block;">Incident</label>
+                <div id="deleteIncidentMeta" class="text-muted">—</div>
+            </div>
+            <div class="form-group">
+                <label for="deleteReason">Reason for removal *</label>
+                <textarea id="deleteReason" rows="4" placeholder="Example: created by mistake / already resolved but not updated / duplicate incident / invalid entry"></textarea>
+            </div>
+            <div class="danger-text">
+                This action preserves traceability but removes the incident from the active operational flow.
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" id="cancelDeleteBtn" class="secondary">Cancel</button>
+            <button type="button" id="confirmDeleteBtn" class="delete-btn">Archive incident</button>
+        </div>
+    </div>
+</div>
+
+<script src="./assets/app.js"></script>
 </body>
 </html>

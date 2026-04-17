@@ -1,9 +1,12 @@
 import {
+    ensureExtendedSchema,
     error,
     generateIncidentId,
     insertEvent,
     json,
     listIncidents,
+    normalizeAttachment,
+    normalizeRecipient,
     nowIso,
     parseJson
 } from "../_lib.js";
@@ -14,6 +17,7 @@ export async function onRequestGet(context) {
 }
 
 export async function onRequestPost(context) {
+    await ensureExtendedSchema(context.env);
     const body = await parseJson(context.request);
     if (!body) return error("Invalid JSON body.");
 
@@ -41,6 +45,18 @@ export async function onRequestPost(context) {
     const id = generateIncidentId();
     const createdAt = nowIso();
     const comment = typeof body.comment === "string" ? body.comment.trim() : "";
+    const referenceNotes = typeof body.referenceNotes === "string" ? body.referenceNotes.trim() : "";
+    const errorTypesSelected = Array.isArray(body.errorTypesSelected)
+        ? body.errorTypesSelected.map((value) => `${value}`.trim()).filter(Boolean)
+        : (typeof body.errorType === "string"
+            ? body.errorType.split(" | ").map((value) => value.trim()).filter(Boolean)
+            : []);
+    const attachments = Array.isArray(body.attachments)
+        ? body.attachments.map(normalizeAttachment).filter(Boolean)
+        : [];
+    const recipients = Array.isArray(body.recipients)
+        ? body.recipients.map(normalizeRecipient).filter(Boolean)
+        : [];
 
     await context.env.DB.prepare(
         `INSERT INTO incidents (
@@ -61,6 +77,20 @@ export async function onRequestPost(context) {
         createdAt
     ).run();
 
+    await context.env.DB.prepare(
+        `INSERT OR REPLACE INTO incident_details (
+            incident_id, reference_notes, error_types_json, attachments_json, recipients_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+        id,
+        referenceNotes,
+        JSON.stringify(errorTypesSelected),
+        JSON.stringify(attachments),
+        JSON.stringify(recipients),
+        createdAt,
+        createdAt
+    ).run();
+
     await insertEvent(context.env, id, "created", {
         batchNumber: body.batchNumber.trim(),
         partNumber: body.partNumber.trim(),
@@ -68,7 +98,11 @@ export async function onRequestPost(context) {
         operator: body.operator.trim(),
         supplier: body.supplier.trim(),
         buyer: body.buyer.trim(),
-        errorType: body.errorType.trim()
+        errorType: body.errorType.trim(),
+        errorTypesSelected,
+        referenceNotes,
+        attachmentCount: attachments.length,
+        recipients: recipients.map((recipient) => recipient.email)
     });
 
     return json({ ok: true, id }, { status: 201 });
