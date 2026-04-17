@@ -1,7 +1,26 @@
 * { box-sizing: border-box; margin: 0; }
         body { background: #f5f9ff; padding: 24px 32px; font-family: 'Inter', system-ui, sans-serif; color: #1e293b; }
+        .page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
         h1 { font-weight: 600; font-size: 1.9rem; letter-spacing: -0.02em; color: #0b2b4a; display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
         .badge { background: #dbeafe; color: #1e4a7a; padding: 4px 14px; border-radius: 40px; font-size: 0.8rem; font-weight: 500; }
+        .help-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1.5px solid #cbd5e1;
+            background: #ffffff;
+            color: #1e4a7a;
+            text-decoration: none;
+            font-weight: 600;
+            transition: 0.15s ease;
+        }
+        .help-link:hover {
+            background: #eff6ff;
+            border-color: #93c5fd;
+            color: #0f3a5e;
+        }
         .subhead { color: #475569; margin-bottom: 28px; border-left: 4px solid #2563eb; padding-left: 18px; }
         .app-grid { display: flex; flex-direction: column; gap: 28px; }
         .card { background: white; border-radius: 20px; padding: 22px 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.03); border: 1px solid #e9eef4; }
@@ -90,6 +109,7 @@
             .incident-card .form-grid { grid-template-columns: 1fr; }
             .incident-card .form-group.full-width { grid-column: span 1; }
             .analytics-actions { align-items: stretch; }
+            .page-header { align-items: flex-start; }
             body { padding: 16px; }
         }
 
