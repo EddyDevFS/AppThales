@@ -9,8 +9,10 @@
         .card-header h2 { font-weight: 600; font-size: 1.4rem; color: #0f3a5e; }
         .row-split { display: grid; grid-template-columns: 1.1fr 1.9fr; gap: 24px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; }
+        .incident-card .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         .form-group.full-width { grid-column: span 2; }
+        .incident-card .form-group.full-width { grid-column: span 3; }
         label { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3px; color: #5e7180; }
         input, select, textarea { padding: 10px 12px; border: 1.5px solid #dde3e9; border-radius: 14px; font-size: 0.9rem; background: white; }
         input:focus, select:focus, textarea:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
@@ -78,9 +80,13 @@
 
         @media (max-width: 1280px) {
             .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .incident-card .form-grid { grid-template-columns: 1fr 1fr; }
+            .incident-card .form-group.full-width { grid-column: span 2; }
         }
         @media (max-width: 900px) {
             .row-split, .charts-row, .kpi-grid, .summary-grid { grid-template-columns: 1fr; }
+            .incident-card .form-grid { grid-template-columns: 1fr; }
+            .incident-card .form-group.full-width { grid-column: span 1; }
             body { padding: 16px; }
         }
 

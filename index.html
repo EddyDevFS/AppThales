@@ -16,9 +16,8 @@
 <div id="appStatus" class="app-status"></div>
 
 <div class="app-grid">
-    <!-- NEW INCIDENT + OPEN -->
-    <div class="row-split">
-        <div class="card">
+    <!-- NEW INCIDENT -->
+        <div class="card incident-card">
             <div class="card-header"><h2><i class="fas fa-plus-circle"></i> New Incident</h2></div>
             <form id="incidentForm">
                 <div class="form-grid">
@@ -85,6 +84,7 @@
                 </div>
             </div>
         </div>
+        <!-- OPEN INCIDENTS -->
         <div class="card">
             <div class="card-header"><h2><i class="fas fa-folder-open"></i> Open Incidents</h2><span id="openCountBadge" class="badge">0</span></div>
             <div class="filter-bar">
@@ -112,8 +112,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
     <!-- RESOLVED HISTORY -->
     <div class="card">
         <div class="card-header"><h2><i class="fas fa-check-circle"></i> Resolved History</h2><span id="resolvedCountBadge" class="badge">0</span></div>
