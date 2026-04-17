@@ -274,8 +274,34 @@
         let currentPeriod='all';
         function filterByPeriod(arr){ if(currentPeriod==='all') return arr; const limit=new Date(); limit.setDate(limit.getDate()-parseInt(currentPeriod)); return arr.filter(i=>new Date(i.createdAt)>=limit); }
 
+        function setSelectValue(selectId, value) {
+            const select = document.getElementById(selectId);
+            if (!select || value === undefined || value === null) return;
+            const normalizedValue = String(value);
+            if ([...select.options].some((option) => option.value === normalizedValue)) {
+                select.value = normalizedValue;
+            }
+        }
+
         // populate selects
         function populateSelects(){
+            const currentSelections = {
+                operator: document.getElementById('operatorSelect')?.value || '',
+                supplier: document.getElementById('supplierSelect')?.value || '',
+                buyer: document.getElementById('buyerSelect')?.value || '',
+                errorType: document.getElementById('errorTypeSelect')?.value || '',
+                recipient: document.getElementById('recipientSelect')?.value || '',
+                filterSupplierOpen: document.getElementById('filterSupplierOpen')?.value || '',
+                filterSupplierResolved: document.getElementById('filterSupplierResolved')?.value || '',
+                filterSupplierDeleted: document.getElementById('filterSupplierDeleted')?.value || '',
+                filterBuyerOpen: document.getElementById('filterBuyerOpen')?.value || '',
+                filterBuyerResolved: document.getElementById('filterBuyerResolved')?.value || '',
+                filterBuyerDeleted: document.getElementById('filterBuyerDeleted')?.value || '',
+                filterErrorOpen: document.getElementById('filterErrorOpen')?.value || '',
+                filterErrorResolved: document.getElementById('filterErrorResolved')?.value || '',
+                filterErrorDeleted: document.getElementById('filterErrorDeleted')?.value || ''
+            };
+
             document.querySelectorAll('#operatorSelect, #supplierSelect, #buyerSelect').forEach(s=>{ s.innerHTML='<option value="">-- Select --</option>'; });
             operators.forEach(v=>document.getElementById('operatorSelect').appendChild(new Option(v,v)));
             suppliers.forEach(v=>document.getElementById('supplierSelect').appendChild(new Option(v,v)));
@@ -302,6 +328,21 @@
             ['filterSupplierOpen','filterSupplierResolved','filterSupplierDeleted'].forEach(id=>{ const sel=document.getElementById(id); if(!sel) return; sel.innerHTML='<option value="">All suppliers</option>'; suppliers.forEach(s=>sel.appendChild(new Option(s,s))); });
             ['filterBuyerOpen','filterBuyerResolved','filterBuyerDeleted'].forEach(id=>{ const sel=document.getElementById(id); if(!sel) return; sel.innerHTML='<option value="">All buyers</option>'; buyers.forEach(b=>sel.appendChild(new Option(b,b))); });
             ['filterErrorOpen','filterErrorResolved','filterErrorDeleted'].forEach(id=>{ const sel=document.getElementById(id); if(!sel) return; sel.innerHTML='<option value="">All errors</option>'; errorTypes.forEach(e=>sel.appendChild(new Option(e,e))); });
+
+            setSelectValue('operatorSelect', currentSelections.operator);
+            setSelectValue('supplierSelect', currentSelections.supplier);
+            setSelectValue('buyerSelect', currentSelections.buyer);
+            setSelectValue('errorTypeSelect', currentSelections.errorType);
+            setSelectValue('recipientSelect', currentSelections.recipient);
+            setSelectValue('filterSupplierOpen', currentSelections.filterSupplierOpen);
+            setSelectValue('filterSupplierResolved', currentSelections.filterSupplierResolved);
+            setSelectValue('filterSupplierDeleted', currentSelections.filterSupplierDeleted);
+            setSelectValue('filterBuyerOpen', currentSelections.filterBuyerOpen);
+            setSelectValue('filterBuyerResolved', currentSelections.filterBuyerResolved);
+            setSelectValue('filterBuyerDeleted', currentSelections.filterBuyerDeleted);
+            setSelectValue('filterErrorOpen', currentSelections.filterErrorOpen);
+            setSelectValue('filterErrorResolved', currentSelections.filterErrorResolved);
+            setSelectValue('filterErrorDeleted', currentSelections.filterErrorDeleted);
         }
 
         function renderPendingAttachments() {
